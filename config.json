@@ -1,0 +1,4 @@
+{
+  "redisAddr": "localhost:6379",
+  "serverPort": "8888"
+}

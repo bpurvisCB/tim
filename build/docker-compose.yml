@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+      # Increase the shared_buffers size; 8GB dedicated to PostgreSQL for caching data
+      POSTGRES_SHARED_BUFFERS: "8GB"
+      # Increase the maintenance work memory; 2GB for maintenance operations such as bulk data loading
+      POSTGRES_MAINTENANCE_WORK_MEM: "2GB"
+      # Turn off synchronous commit, which can speed up transactions
+      POSTGRES_SYNCHRONOUS_COMMIT: "off"
+      # Increase the commit delay, which allows gathering more transactions per commit when there are concurrent transactions
+      POSTGRES_COMMIT_DELAY: "1000"
+      # Increase the effective cache size, which PostgreSQL uses to estimate the cost of an index scan
+      POSTGRES_EFFECTIVE_CACHE_SIZE: "24GB"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
