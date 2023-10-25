@@ -23,7 +23,7 @@ var (
 )
 
 func uploadJSONToDatabase() error {
-	startTime := time.Now() // Record the start tim
+	startTime := time.Now() // Record the start time
 
 	// 1. Read the JSON file
 	filePath := "./2023-10-01_TheAlliance_AlliancePremierNetwork_in-network-rates.json"
@@ -46,17 +46,6 @@ func uploadJSONToDatabase() error {
 		return fmt.Errorf("Failed to connect to database: %s", err.Error())
 	}
 
-	// Begin a transaction
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-	if err = tx.Error; err != nil {
-		return err
-	}
-
 	// 5. Insert the data into the respective tables
 	mainEntry := pkg.MainTable{
 		ReportingEntityName: data.ReportingEntityName,
@@ -68,7 +57,10 @@ func uploadJSONToDatabase() error {
 		LastUpdatedOn:       data.LastUpdatedOn,
 		Version:             data.Version,
 	}
-	db.Create(&mainEntry)
+	result := db.Create(&mainEntry)
+	if result.Error != nil {
+		fmt.Printf("Error inserting into MainTable: %s\n", result.Error)
+	}
 
 	// 6. Loop through in_network entries
 	for _, inNetwork := range data.InNetwork {
@@ -83,7 +75,11 @@ func uploadJSONToDatabase() error {
 			// Assuming you have a foreign key to reference MainTable
 			MainTableID: mainEntry.ID,
 		}
-		db.Create(&inNetworkEntry)
+		result := db.Create(&inNetworkEntry)
+		if result.Error != nil {
+			fmt.Printf("Error inserting into InNetworkTable: %s\n", result.Error)
+			continue // Skip processing this inNetwork entry and move to the next one
+		}
 
 		// 7. For each in_network entry, loop through negotiated_rates
 		for _, negotiatedRate := range inNetwork.NegotiatedRates {
@@ -91,7 +87,11 @@ func uploadJSONToDatabase() error {
 				// TODO: Fill fields from negotiatedRate if there are any extra fields
 				InNetworkTableID: inNetworkEntry.ID,
 			}
-			db.Create(&negotiatedRateEntry)
+			result := db.Create(&negotiatedRateEntry)
+			if result.Error != nil {
+				fmt.Printf("Error inserting into NegotiatedRatesTable: %s\n", result.Error)
+				continue // Skip this negotiatedRate entry and move to the next one
+			}
 
 			// Inserting provider_groups
 			for _, providerGroup := range negotiatedRate.ProviderGroups {
@@ -99,7 +99,11 @@ func uploadJSONToDatabase() error {
 					// Assuming you have a foreign key to reference NegotiatedRatesTable
 					NegotiatedRatesTableID: negotiatedRateEntry.ID,
 				}
-				db.Create(&providerGroupEntry)
+				result := db.Create(&providerGroupEntry)
+				if result.Error != nil {
+					fmt.Printf("Error inserting into ProviderGroupsTable: %s\n", result.Error)
+					continue // Skip this providerGroup and move to the next one
+				}
 
 				// Inserting npi entries
 				for _, npi := range providerGroup.NPI {
@@ -108,7 +112,11 @@ func uploadJSONToDatabase() error {
 						// Assuming you have a foreign key to reference ProviderGroupsTable
 						ProviderGroupsTableID: providerGroupEntry.ID,
 					}
-					db.Create(&npiEntry)
+					result := db.Create(&npiEntry)
+					if result.Error != nil {
+						fmt.Printf("Error inserting into NpiTable: %s\n", result.Error)
+						continue
+					}
 				}
 
 				// Inserting tin
@@ -118,7 +126,10 @@ func uploadJSONToDatabase() error {
 					// Assuming you have a foreign key to reference ProviderGroupsTable
 					ProviderGroupsTableID: providerGroupEntry.ID,
 				}
-				db.Create(&tinEntry)
+				result = db.Create(&tinEntry)
+				if result.Error != nil {
+					fmt.Printf("Error inserting into TinTable: %s\n", result.Error)
+				}
 			}
 
 			// Inserting negotiated_prices entries
@@ -131,7 +142,11 @@ func uploadJSONToDatabase() error {
 					// Assuming you have a foreign key to reference NegotiatedRatesTable
 					NegotiatedRatesTableID: negotiatedRateEntry.ID,
 				}
-				db.Create(&negotiatedPriceEntry)
+				result := db.Create(&negotiatedPriceEntry)
+				if result.Error != nil {
+					fmt.Printf("Error inserting into NegotiatedPricesTable: %s\n", result.Error)
+					continue
+				}
 
 				// Inserting service_code entries
 				for _, serviceCode := range negotiatedPrice.ServiceCode {
@@ -140,16 +155,15 @@ func uploadJSONToDatabase() error {
 						// Assuming you have a foreign key to reference NegotiatedPricesTable
 						NegotiatedPricesTableID: negotiatedPriceEntry.ID,
 					}
-					db.Create(&serviceCodeEntry)
+					result := db.Create(&serviceCodeEntry)
+					if result.Error != nil {
+						fmt.Printf("Error inserting into ServiceCodeTable: %s\n", result.Error)
+						continue
+					}
 				}
 			}
 
 		}
-	}
-
-	// Commit the transaction
-	if err := tx.Commit().Error; err != nil {
-		return err
 	}
 
 	elapsedTime := time.Since(startTime)              // Calculate the elapsed time
